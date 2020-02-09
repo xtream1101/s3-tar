@@ -74,11 +74,11 @@ class S3Tar:
             parts_mapping = []
             part_num = 0
             current_file_size = 0
-            current_part_io = io.BytesIO()
             # If out of files or min size is met, then complete file
             while (self.all_keys != []
                     and (self.min_file_size is None
                          or current_file_size < self.min_file_size)):
+                current_part_io = io.BytesIO()
                 part_num += 1
                 logger.debug("Creating part {} of {}"
                              .format(part_num, result_filepath))
@@ -92,6 +92,7 @@ class S3Tar:
                     self.s3.download_fileobj(
                         self.source_bucket, key, source_key_io
                     )
+                    # logger.debug("{}".format(source_key_io.tell()))
 
                     source_tar_io = io.BytesIO()
                     tar = tarfile.open(fileobj=source_tar_io, mode=mode)
@@ -99,6 +100,7 @@ class S3Tar:
                     info.size = source_key_io.tell()
                     source_key_io.seek(0)
                     tar.addfile(tarinfo=info, fileobj=source_key_io)
+                    source_key_io.close()  # Cleanup
 
                     if len(self.all_keys) == 0:
                         logger.debug("Create tar's EOF for {}"
@@ -112,6 +114,7 @@ class S3Tar:
 
                     source_tar_io.seek(0)
                     current_part_io.write(source_tar_io.read())
+                    source_tar_io.close()  # Cleanup
                     current_part_size = current_part_io.tell()
 
                 current_file_size += current_part_size
@@ -126,6 +129,7 @@ class S3Tar:
                     UploadId=resp['UploadId'],
                     Body=current_part_io.read(),
                 )
+                current_part_io.close()  # Cleanup
 
                 parts_mapping.append({
                     'ETag': part_resp['ETag'][1:-1],

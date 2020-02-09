@@ -1,5 +1,8 @@
 # Change log
 
+### 0.1.2
+- Fixed memory bug where files were download files were not getting cleaned up properly
+
 
 ### 0.1.1
 - Fix bug when looping over a folder with many files
