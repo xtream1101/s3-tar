@@ -9,25 +9,35 @@ logger = logging.getLogger(__name__)
 
 class S3Tar:
 
-    def __init__(self, bucket, key, min_file_size=None,
+    def __init__(self, source_bucket, target_key,
+                 target_bucket=None, min_file_size=None,
                  session=boto3.session.Session()):
-        self.bucket = bucket
-        self.key = key
+        self.source_bucket = source_bucket
+        self.target_bucket = target_bucket
+        if self.target_bucket is None:
+            self.target_bucket = self.source_bucket
+
+        self.target_key = target_key
         if min_file_size is not None:
             self.min_file_size = _convert_to_bytes(min_file_size)
         else:
             self.min_file_size = None
 
-        if self.key.endswith('.tar'):
+        if self.target_key.endswith('.tar'):
             self.content_type = 'application/x-tar'
             self.compression_type = None
 
-        elif self.key.endswith('.tar.gz'):
+        elif self.target_key.endswith('.tar.gz'):
             self.content_type = 'application/gzip'
             self.compression_type = 'gz'
 
+        elif self.target_key.endswith('.tar.bz2'):
+            self.content_type = 'application/x-bzip2'
+            self.compression_type = 'bz2'
+
         else:
-            raise ValueError("Invalid file extension: {}".format(self.key))
+            raise ValueError("Invalid file extension: {}"
+                             .format(self.target_key))
 
         self.all_keys = []
         self.s3 = _create_s3_client(session)
@@ -41,7 +51,7 @@ class S3Tar:
         while self.all_keys != []:
             file_number += 1
 
-            result_filepath = self.key
+            result_filepath = self.target_key
             if self.min_file_size is not None:
                 # Need to number since the number of files is unknown
                 compression_ext = ''
@@ -57,7 +67,7 @@ class S3Tar:
             logger.info("Creating file {}".format(result_filepath))
             # Start multipart upload
             resp = self.s3.create_multipart_upload(
-                Bucket=self.bucket,
+                Bucket=self.target_bucket,
                 Key=result_filepath,
             )
 
@@ -79,7 +89,9 @@ class S3Tar:
                     logger.debug("Adding file {} to {}"
                                  .format(key, result_filepath))
                     source_key_io = io.BytesIO()
-                    self.s3.download_fileobj(self.bucket, key, source_key_io)
+                    self.s3.download_fileobj(
+                        self.source_bucket, key, source_key_io
+                    )
 
                     source_tar_io = io.BytesIO()
                     tar = tarfile.open(fileobj=source_tar_io, mode=mode)
@@ -108,7 +120,7 @@ class S3Tar:
                              .format(part_num, result_filepath))
                 current_part_io.seek(0)
                 part_resp = self.s3.upload_part(
-                    Bucket=self.bucket,
+                    Bucket=self.target_bucket,
                     Key=result_filepath,
                     PartNumber=part_num,
                     UploadId=resp['UploadId'],
@@ -122,7 +134,7 @@ class S3Tar:
 
             # Finish
             self.s3.complete_multipart_upload(
-                Bucket=self.bucket,
+                Bucket=self.target_bucket,
                 Key=result_filepath,
                 UploadId=resp['UploadId'],
                 MultipartUpload={'Parts': parts_mapping},
@@ -134,13 +146,13 @@ class S3Tar:
             return [(x['Key']) for x in resp['Contents']]
 
         objects_list = []
-        resp = self.s3.list_objects(Bucket=self.bucket, Prefix=prefix)
+        resp = self.s3.list_objects(Bucket=self.source_bucket, Prefix=prefix)
         objects_list.extend(resp_to_filelist(resp))
         logger.debug("Found {} objects so far".format(len(objects_list)))
         while resp['IsTruncated']:
             last_key = objects_list[-1][0]
             resp = self.s3.list_objects(
-                Bucket=self.bucket,
+                Bucket=self.source_bucket,
                 Prefix=prefix,
                 Marker=last_key,
             )

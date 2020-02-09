@@ -14,9 +14,15 @@ def cli():
         description='Tar (and compress) files in s3'
     )
     parser.add_argument(
-        "--bucket",
+        "--source-bucket",
         help="base bucket to use",
         required=True,
+    )
+    parser.add_argument(
+        "--target-bucket",
+        help=("Bucket that the tar will be saved to."
+              " Only needed if different then source bucket"),
+        default=None,
     )
     parser.add_argument(
         "--folder",
@@ -25,7 +31,8 @@ def cli():
     )
     parser.add_argument(
         "--filename",
-        help="Output filename for the tar file.\nExtension: tar, or tar.gz",
+        help=("Output filename for the tar file."
+              "\nExtension: tar, tar.gz, or tar.bz2"),
         required=True,
     )
     parser.add_argument(
@@ -37,6 +44,11 @@ def cli():
     )
     args = parser.parse_args()
 
-    job = S3Tar(args.bucket, args.filename, min_file_size=args.filesize)
+    job = S3Tar(
+        args.source_bucket,
+        args.filename,
+        target_bucket=args.target_bucket,
+        min_file_size=args.min_filesize,
+    )
     job.add_files(args.folder)
     job.tar()
