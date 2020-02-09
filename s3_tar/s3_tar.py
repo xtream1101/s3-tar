@@ -146,18 +146,19 @@ class S3Tar:
             return [(x['Key']) for x in resp['Contents']]
 
         objects_list = []
+        logger.info("Gathering files from folder {}".format(prefix))
         resp = self.s3.list_objects(Bucket=self.source_bucket, Prefix=prefix)
         objects_list.extend(resp_to_filelist(resp))
-        logger.debug("Found {} objects so far".format(len(objects_list)))
+        logger.debug("Found {} objects so far...".format(len(objects_list)))
         while resp['IsTruncated']:
-            last_key = objects_list[-1][0]
+            last_key = objects_list[-1]
             resp = self.s3.list_objects(
                 Bucket=self.source_bucket,
                 Prefix=prefix,
                 Marker=last_key,
             )
             objects_list.extend(resp_to_filelist(resp))
-            logger.debug("Found {} objects so far".format(len(objects_list)))
+            logger.debug("Found {} objects so far...".format(len(objects_list)))
 
         logger.info("Found {} objects in the folder '{}'"
                     .format(len(objects_list),

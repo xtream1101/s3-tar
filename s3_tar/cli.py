@@ -4,8 +4,12 @@ import argparse
 from . import S3Tar
 
 logging.basicConfig(
-    level=os.getenv('S3_TAR_LOG_LEVEL', 'INFO').upper(),
+    level=logging.WARNING,
     format='%(message)s',
+)
+
+logging.getLogger('s3_tar.s3_tar').setLevel(
+    os.getenv('S3_TAR_LOG_LEVEL', 'INFO').upper()
 )
 
 
