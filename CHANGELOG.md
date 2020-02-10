@@ -1,5 +1,11 @@
 # Change log
 
+
+### 0.1.3
+- Added threads
+    - adds the cli flag `--cache-size` which is the number of files to download and store in memory
+
+
 ### 0.1.2
 - Fixed memory bug where files that were download were not getting cleaned up properly
 

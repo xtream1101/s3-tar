@@ -46,12 +46,19 @@ def cli():
               " in [B,KB,MB,GB,TB]. e.x. 5.2GB"),
         default=None,
     )
+    parser.add_argument(
+        "--cache-size",
+        help="Number of files to download into memory at a time",
+        type=int,
+        default=5,
+    )
     args = parser.parse_args()
 
     job = S3Tar(
         args.source_bucket,
         args.filename,
         target_bucket=args.target_bucket,
+        cache_size=args.cache_size,
         min_file_size=args.min_filesize,
     )
     job.add_files(args.folder)

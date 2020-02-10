@@ -31,7 +31,8 @@ min_file_size = '50MB'  # ex: FILE_TO_SAVE_TO-1.tar, FILE_TO_SAVE_TO-2.tar, ...
 # Init the job
 job = S3Tar(bucket, tared_file,
             min_file_size=min_file_size,
-            target_bucket=None,  # Can be used to save the archive into a different bucket
+            # target_bucket=None,  # Default: source bucket. Can be used to save the archive into a different bucket
+            # cache_size=5,  # Default 5, Number of files to hold in memory to be processed
             # session=boto3.session.Session(),  # For custom aws session
 )
 # Add files, can call multiple times to add files from other directories

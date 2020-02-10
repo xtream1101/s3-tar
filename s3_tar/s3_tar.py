@@ -1,8 +1,10 @@
 import io
+import time
 import boto3
 import logging
 import tarfile
-from .utils import _create_s3_client, _convert_to_bytes, MIN_S3_SIZE
+import threading
+from .utils import _create_s3_client, _convert_to_bytes, _threads, MIN_S3_SIZE
 
 logger = logging.getLogger(__name__)
 
@@ -10,7 +12,9 @@ logger = logging.getLogger(__name__)
 class S3Tar:
 
     def __init__(self, source_bucket, target_key,
-                 target_bucket=None, min_file_size=None,
+                 target_bucket=None,
+                 min_file_size=None,
+                 cache_size=5,
                  session=boto3.session.Session()):
         self.source_bucket = source_bucket
         self.target_bucket = target_bucket
@@ -39,16 +43,27 @@ class S3Tar:
             raise ValueError("Invalid file extension: {}"
                              .format(self.target_key))
 
-        self.all_keys = []
+        self.mode = 'w'
+        if self.compression_type is not None:
+            self.mode += '|' + self.compression_type
+
+        self.all_keys = []  # Keys the user adds
+        self.file_cache = []  # io objects that are ready to be combined
+        self.cache_size = cache_size
+        if self.cache_size is None or self.cache_size <= 0:
+            raise ValueError("cache size must be 1 or larger")
+
         self.s3 = _create_s3_client(session)
 
     def tar(self):
-        mode = 'w'
-        if self.compression_type is not None:
-            mode += '|' + self.compression_type
+        # Start fetching files in the background
+        cache_t = threading.Thread(target=self._pre_fetch_files)
+        cache_t.daemon = True
+        cache_t.start()
+
         file_number = 0
         # Keep creating new tar(.gz) as long as there are files left
-        while self.all_keys != []:
+        while self._is_complete() is False:
             file_number += 1
 
             result_filepath = self.target_key
@@ -75,7 +90,7 @@ class S3Tar:
             part_num = 0
             current_file_size = 0
             # If out of files or min size is met, then complete file
-            while (self.all_keys != []
+            while (self._is_complete() is False
                     and (self.min_file_size is None
                          or current_file_size < self.min_file_size)):
                 current_part_io = io.BytesIO()
@@ -83,38 +98,13 @@ class S3Tar:
                 logger.debug("Creating part {} of {}"
                              .format(part_num, result_filepath))
                 current_part_size = 0
-                while (self.all_keys != []
+                while (self._is_complete() is False
                         and current_part_size < MIN_S3_SIZE * 2):
-                    key = self.all_keys.pop()
-                    logger.debug("Adding file {} to {}"
-                                 .format(key, result_filepath))
-                    source_key_io = io.BytesIO()
-                    self.s3.download_fileobj(
-                        self.source_bucket, key, source_key_io
-                    )
-                    # logger.debug("{}".format(source_key_io.tell()))
-
-                    source_tar_io = io.BytesIO()
-                    tar = tarfile.open(fileobj=source_tar_io, mode=mode)
-                    info = tarfile.TarInfo(name=key.split('/')[-1])
-                    info.size = source_key_io.tell()
-                    source_key_io.seek(0)
-                    tar.addfile(tarinfo=info, fileobj=source_key_io)
-                    source_key_io.close()  # Cleanup
-
-                    if len(self.all_keys) == 0:
-                        logger.debug("Create tar's EOF for {}"
-                                     .format(result_filepath))
-                        # Create the EOF of the tar file
-                        tar.close()
-                    elif self.compression_type is not None:
-                        # When using compression, the data is
-                        # not writted to the fileobj until its done
-                        tar.fileobj.close()
-
+                    source_tar_io = self._get_file_from_cache()
                     source_tar_io.seek(0)
                     current_part_io.write(source_tar_io.read())
                     source_tar_io.close()  # Cleanup
+                    # New current size
                     current_part_size = current_part_io.tell()
 
                 current_file_size += current_part_size
@@ -143,6 +133,77 @@ class S3Tar:
                 UploadId=resp['UploadId'],
                 MultipartUpload={'Parts': parts_mapping},
             )
+
+    def _is_complete(self):
+        if self.all_keys == [] and self.file_cache == []:
+            return True
+        return False
+
+    def _pre_fetch_files(self):
+        # Make sure this is the last file the tar saves, will have EOF bytes
+        last_file_key = self.all_keys.pop()
+
+        def _fetch(key):
+            logger.debug("Adding to cache {}".format(key))
+            self.file_cache.append(
+                self._get_source_data(self.source_bucket, key)
+            )
+            while len(self.file_cache) >= self.cache_size:
+                # Hold here until more files are needed
+                time.sleep(0.1)
+
+        _threads(self.cache_size, self.all_keys, _fetch)
+        # Now add last file
+        self.file_cache.append(
+            self._get_source_data(self.source_bucket, last_file_key)
+        )
+        self.all_keys = []  # clear now that all have been processed
+
+    def _get_source_data(self, bucket, key, is_last_file=False):
+        source_key_io = self._download_source_file(
+            bucket,
+            key
+        )
+        source_tar_io = self._save_bytes_to_tar(
+            key.split('/')[-1],
+            source_key_io,
+            mode=self.mode,
+            close=is_last_file,
+        )
+        source_key_io.close()  # Cleanup
+        return source_tar_io
+
+    def _get_file_from_cache(self):
+        while True:
+            if self.file_cache != []:
+                # Must pop from idx 0
+                # the last item in the file cache has the EOF bytes
+                return self.file_cache.pop(0)
+            time.sleep(0.1)
+
+    def _download_source_file(self, bucket, key):
+        source_key_io = io.BytesIO()
+        self.s3.download_fileobj(bucket, key, source_key_io)
+        return source_key_io
+
+    @classmethod
+    def _save_bytes_to_tar(cls, name, source, mode, close=True):
+        source_tar_io = io.BytesIO()
+        tar = tarfile.open(fileobj=source_tar_io, mode=mode)
+        info = tarfile.TarInfo(name=name)
+        info.size = source.tell()
+        source.seek(0)
+        tar.addfile(tarinfo=info, fileobj=source)
+
+        if close is True:
+            # Create the EOF of the tar file
+            tar.close()
+        elif '|' in mode:
+            # When using compression, the data is
+            # not writted to the fileobj until its done
+            tar.fileobj.close()
+
+        return source_tar_io
 
     def add_files(self, prefix):
 
