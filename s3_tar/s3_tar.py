@@ -154,6 +154,7 @@ class S3Tar:
 
         _threads(self.cache_size, self.all_keys, _fetch)
         # Now add last file
+        logger.debug("Adding last file to cache {}".format(last_file_key))
         self.file_cache.append(
             self._get_source_data(self.source_bucket, last_file_key)
         )
@@ -212,8 +213,9 @@ class S3Tar:
 
         objects_list = []
         logger.info("Gathering files from folder {}".format(prefix))
-        resp = self.s3.list_objects(Bucket=self.source_bucket, Prefix=prefix)
+        resp = self.s3.list_objects_v2(Bucket=self.source_bucket, Prefix=prefix)
         objects_list.extend(resp_to_filelist(resp))
+        objects_list.remove(prefix)  # Do not add the prefix as a file
         logger.debug("Found {} objects so far...".format(len(objects_list)))
         while resp['IsTruncated']:
             last_key = objects_list[-1]
