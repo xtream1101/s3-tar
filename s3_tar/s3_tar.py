@@ -1,4 +1,5 @@
 import io
+import json
 import time
 import boto3
 import logging
@@ -15,6 +16,7 @@ class S3Tar:
                  target_bucket=None,
                  min_file_size=None,
                  cache_size=5,
+                 save_metadata=False,
                  session=boto3.session.Session()):
         self.source_bucket = source_bucket
         self.target_bucket = target_bucket
@@ -42,6 +44,8 @@ class S3Tar:
         else:
             raise ValueError("Invalid file extension: {}"
                              .format(self.target_key))
+
+        self.save_metadata = save_metadata
 
         self.mode = 'w'
         if self.compression_type is not None:
@@ -145,25 +149,38 @@ class S3Tar:
 
         def _fetch(key):
             logger.debug("Adding to cache {}".format(key))
-            self.file_cache.append(
-                self._get_source_data(self.source_bucket, key)
-            )
+            self._add_key_to_cache(self.source_bucket, key)
+            if self.save_metadata is True:
+                self._add_metadata_to_cache(self.source_bucket, key)
+
             while len(self.file_cache) >= self.cache_size:
                 # Hold here until more files are needed
                 time.sleep(0.1)
 
         _threads(self.cache_size, self.all_keys, _fetch)
-        # Now add last file
+        # Now add last file (and metadata if needed)
+        if self.save_metadata is True:
+            self._add_metadata_to_cache(self.source_bucket, last_file_key)
         logger.debug("Adding last file to cache {}".format(last_file_key))
-        self.file_cache.append(
-            self._get_source_data(self.source_bucket, last_file_key)
+        self._add_key_to_cache(
+            self.source_bucket, last_file_key, is_last_file=False
         )
         self.all_keys = []  # clear now that all have been processed
 
+    def _add_key_to_cache(self, bucket, key, is_last_file=False):
+        self.file_cache.append(
+            self._get_source_data(bucket, key, is_last_file=is_last_file)
+        )
+
+    def _add_metadata_to_cache(self, bucket, key):
+        metadata_io = self._get_source_metadata(bucket, key)
+        if metadata_io is not None:
+            logger.debug("Adding metadata file to cache {}".format(key))
+            self.file_cache.append(metadata_io)
+
     def _get_source_data(self, bucket, key, is_last_file=False):
         source_key_io = self._download_source_file(
-            bucket,
-            key
+            bucket, key
         )
         source_tar_io = self._save_bytes_to_tar(
             key.split('/')[-1],
@@ -173,6 +190,19 @@ class S3Tar:
         )
         source_key_io.close()  # Cleanup
         return source_tar_io
+
+    def _get_source_metadata(self, bucket, key):
+        source_metadata_io = self._download_source_metadata(bucket, key)
+        if source_metadata_io is None:
+            return None
+
+        source_metadata_tar_io = self._save_bytes_to_tar(
+            key.split('/')[-1] + '.metadata.json',
+            source_metadata_io,
+            mode=self.mode,
+        )
+        source_metadata_io.close()  # Cleanup
+        return source_metadata_tar_io
 
     def _get_file_from_cache(self):
         while True:
@@ -187,8 +217,17 @@ class S3Tar:
         self.s3.download_fileobj(bucket, key, source_key_io)
         return source_key_io
 
+    def _download_source_metadata(self, bucket, key):
+        source_metadata_io = io.BytesIO()
+        metadata = self.s3.head_object(Bucket=bucket, Key=key)['Metadata']
+        if metadata == {}:
+            return None
+
+        source_metadata_io.write(json.dumps(metadata).encode('utf-8'))
+        return source_metadata_io
+
     @classmethod
-    def _save_bytes_to_tar(cls, name, source, mode, close=True):
+    def _save_bytes_to_tar(cls, name, source, mode, close=False):
         source_tar_io = io.BytesIO()
         tar = tarfile.open(fileobj=source_tar_io, mode=mode)
         info = tarfile.TarInfo(name=name)

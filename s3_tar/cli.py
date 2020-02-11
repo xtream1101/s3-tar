@@ -40,6 +40,11 @@ def cli():
         required=True,
     )
     parser.add_argument(
+        "--save-metadata",
+        help="If a file has metadata, save it to a .metadata.json file",
+        action='store_true',
+    )
+    parser.add_argument(
         "--min-filesize",
         help=("Use to create multiple files if needed."
               " Min filesize of the tar'd files"
@@ -60,6 +65,7 @@ def cli():
         target_bucket=args.target_bucket,
         cache_size=args.cache_size,
         min_file_size=args.min_filesize,
+        save_metadata=args.save_metadata,
     )
     job.add_files(args.folder)
     job.tar()
