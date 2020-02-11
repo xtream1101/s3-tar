@@ -29,7 +29,7 @@ job = S3Tar(
     # min_file_size='50MB',  # Default: None. The min size to make each tar file [B,KB,MB,GB,TB]. If set, a number will be added to each file name
     # target_bucket=None,  # Default: source bucket. Can be used to save the archive into a different bucket
     # cache_size=5,  # Default 5. Number of files to hold in memory to be processed
-    # save_metadata=False,  # If True
+    # save_metadata=False,  # If True, and the file has metadata, save a file with the same name using the suffix of `.metadata.json`
     # session=boto3.session.Session(),  # For custom aws session
 )
 # Add files, can call multiple times to add files from other directories
