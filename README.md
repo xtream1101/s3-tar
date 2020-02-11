@@ -26,16 +26,16 @@ from s3_tar import S3Tar
 job = S3Tar(
     'YOUR_BUCKET_NAME',
     'FILE_TO_SAVE_TO.tar',  # Use `tar.gz` or `tar.bz2` to enable compression
-    # min_file_size='50MB',  # The min size to make each tar file [B,KB,MB,GB,TB]. If set, a number will be added to each file name
+    # min_file_size='50MB',  # Default: None. The min size to make each tar file [B,KB,MB,GB,TB]. If set, a number will be added to each file name
     # target_bucket=None,  # Default: source bucket. Can be used to save the archive into a different bucket
-    # cache_size=5,  # Default 5, Number of files to hold in memory to be processed
+    # cache_size=5,  # Default 5. Number of files to hold in memory to be processed
     # save_metadata=False,  # If True
     # session=boto3.session.Session(),  # For custom aws session
 )
 # Add files, can call multiple times to add files from other directories
-job.add_files('FOLDER_IN_S3/)
+job.add_files('FOLDER_IN_S3/')
 # Add a single file at a time
 job.add_file('some/file_key.json')
-# Star the tar'ing job after files have been added
+# Start the tar'ing job after files have been added
 job.tar()
 ```
