@@ -1,5 +1,5 @@
 from s3_tar import S3Tar
-from moto import mock_s3
+# from moto import mock_s3
 
 
 ###
@@ -40,5 +40,3 @@ def test_is_complete_has_cache():
     tar = S3Tar('my-bucket', 'my-data.tar')
     tar.file_cache = ['obj1']
     assert tar._is_complete() is False
-
-
