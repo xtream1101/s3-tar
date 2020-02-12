@@ -13,6 +13,9 @@ _*Currently does not preserve directory structure, all files will be in the root
 
 ## Usage
 
+Set the environment variable `S3_ENDPOINT_URL` to use a custom s3 host (minio/etc...)
+
+
 ### Command Line
 To see all command line options run:  
 `s3-tar -h`

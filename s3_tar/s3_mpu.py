@@ -33,7 +33,7 @@ class S3MPU:
         source_io.close()  # Cleanup
 
         self.parts_mapping.append({
-            'ETag': part_resp['ETag'][1:-1],
+            'ETag': part_resp['ETag'][1:-1],  # trim the double quotes
             'PartNumber': part_num,
         })
 

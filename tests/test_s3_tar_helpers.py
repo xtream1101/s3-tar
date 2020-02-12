@@ -3,21 +3,21 @@ from s3_tar import S3Tar
 
 
 ###
-# _get_tar_file_path
+# _add_file_number
 ###
-def test_get_tar_file_path_no_min_tar():
+def test_add_file_number_no_min_tar():
     tar = S3Tar('my-bucket', 'my-data.tar')
-    assert tar._get_tar_file_path(1) == 'my-data.tar'
+    assert tar._add_file_number(1) == 'my-data.tar'
 
 
-def test_get_tar_file_path_with_min_tar():
+def test_add_file_number_with_min_tar():
     tar = S3Tar('my-bucket', 'my-data.tar', min_file_size='10MB')
-    assert tar._get_tar_file_path(1) == 'my-data-1.tar'
+    assert tar._add_file_number(1) == 'my-data-1.tar'
 
 
-def test_get_tar_file_path_with_min_tar_compressed():
+def test_add_file_number_with_min_tar_compressed():
     tar = S3Tar('my-bucket', 'my-data.tar.gz', min_file_size='10MB')
-    assert tar._get_tar_file_path(2) == 'my-data-2.tar.gz'
+    assert tar._add_file_number(2) == 'my-data-2.tar.gz'
 
 
 ###

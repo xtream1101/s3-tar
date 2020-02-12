@@ -80,7 +80,7 @@ class S3Tar:
         Args:
             file_number (int): The number of this file getting created
         """
-        result_filepath = self._get_tar_file_path(file_number)
+        result_filepath = self._add_file_number(file_number)
 
         # Start multipart upload
         mpu = S3MPU(self.s3, self.target_bucket, result_filepath)
@@ -135,7 +135,7 @@ class S3Tar:
 
         return None
 
-    def _get_tar_file_path(self, file_number):
+    def _add_file_number(self, file_number):
         """Add file number to tar file if needed
 
         If its possible that there may need to be multiple tar files,
@@ -174,30 +174,23 @@ class S3Tar:
         """Started as a background job to keep adding files to the
         file cache to speed things along
         """
-        # Make sure this is the last file the tar saves, will have EOF bytes
-        last_file_key = self.all_keys.pop()
-
         def _fetch(key):
-            logger.debug("Adding to cache {}".format(key))
-            self._add_key_to_cache(key)
-
             while len(self.file_cache) >= self.cache_size:
                 # Hold here until more files are needed in the cache
                 time.sleep(0.1)
 
+            logger.debug("Adding to cache {}".format(key))
+            self._add_key_to_cache(key)
+
         _threads(self.cache_size, self.all_keys, _fetch)
-        # Now add last file (and metadata if needed)
-        logger.debug("Adding last file to cache {}".format(last_file_key))
-        self._add_key_to_cache(last_file_key, is_last_file=False)
         self.all_keys = []  # clear now that all have been processed
 
-    def _add_key_to_cache(self, key, is_last_file=False):
+    def _add_key_to_cache(self, key):
         """Get the source of an s3 key (and its metadata if needed) and add
         it to the file cache
 
         Args:
             key (str): the key to download form s3
-            is_last_file (bool, optional): Defaults to False. [description]
         """
         if self.save_metadata is True:
             metadata_io = self._get_tar_source_metadata(key)
@@ -206,18 +199,14 @@ class S3Tar:
                 self.file_cache.append(metadata_io)
 
         self.file_cache.append(
-            self._get_tar_source_data(key, is_last_file=is_last_file)
+            self._get_tar_source_data(key)
         )
 
-    def _get_tar_source_data(self, key, is_last_file=False):
+    def _get_tar_source_data(self, key):
         """Download source file and generate a tar from it
-
-        Default the tar file is not closed, unless is_last_file is True
 
         Args:
             key (str): File from s3 to download
-            is_last_file (bool, optional): Defaults to False.
-                Close the tar file or not
 
         Returns:
             io.BytesIO: BytesIO object of the tar file
@@ -227,7 +216,6 @@ class S3Tar:
             key.split('/')[-1],
             source_key_io,
             mode=self.mode,
-            close=is_last_file,
         )
         source_key_io.close()  # Cleanup
         return source_tar_io
@@ -289,15 +277,13 @@ class S3Tar:
         return source_metadata_io
 
     @classmethod
-    def _save_bytes_to_tar(cls, name, source, mode, close=False):
+    def _save_bytes_to_tar(cls, name, source, mode):
         """Convert raw bytes into a tar
 
         Args:
             name (str): Filename inside the tar
             source (io.BytesIO): The data to be saved into the tar
             mode (str): The file mode in which to open the tar file
-            close (bool, optional): Defaults to False.
-                Should the tar file contain EOF bytes
 
         Returns:
             io.BytesIO: BytesIO object of the tar'd data
@@ -309,10 +295,7 @@ class S3Tar:
         source.seek(0)
         tar.addfile(tarinfo=info, fileobj=source)
 
-        if close is True:
-            # Create the EOF of the tar file
-            tar.close()
-        elif '|' in mode:
+        if '|' in mode:
             # When using compression, the data is
             # not writted to the fileobj until its done
             tar.fileobj.close()

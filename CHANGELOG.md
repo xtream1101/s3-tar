@@ -1,6 +1,11 @@
 # Change log
 
 
+### 0.1.5
+- Added tests
+- Refactored the S3Tar class to be easier to work with/test
+
+
 ### 0.1.4
 - Fixed bug where the base folder is added to the tar with no filename
 - Added `--save-metadata`. Will save any metadata a file has to a json file of the same name with the suffix `.metadata.json`
