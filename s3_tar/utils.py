@@ -66,17 +66,17 @@ def _convert_to_bytes(value):
     """
     if value is None:
         return None
-    value = value.strip()
-    sizes = {'KB': 1024,
-             'MB': 1024**2,
-             'GB': 1024**3,
-             'TB': 1024**4,
+    value = str(value).strip()
+    sizes = {'KB': KB,
+             'MB': MB,
+             'GB': GB,
+             'TB': TB,
              }
     if value[-2:].upper() in sizes:
         return float(value[:-2].strip()) * sizes[value[-2:].upper()]
     elif re.match(r'^\d+(\.\d+)?$', value):
         return float(value)
-    elif re.match(r'^\d+(\.\d+)?\s?B$', value):
+    elif re.match(r'^\d+(\.\d+)?\s?[Bb]$', value):
         return float(value[:-1])
     else:
         raise ValueError("Value {} is not a valid size".format(value))
