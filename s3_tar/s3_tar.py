@@ -5,6 +5,7 @@ import boto3
 import logging
 import tarfile
 import threading
+from .s3_mpu import S3MPU
 from .utils import _create_s3_client, _convert_to_bytes, _threads, MIN_S3_SIZE
 
 logger = logging.getLogger(__name__)
@@ -60,128 +61,168 @@ class S3Tar:
         self.s3 = _create_s3_client(session)
 
     def tar(self):
-        # Start fetching files in the background
+        """Start the tar'ing process with what has been added
+        """
+        # Kick off a job to start download sources in the background
         cache_t = threading.Thread(target=self._pre_fetch_files)
         cache_t.daemon = True
         cache_t.start()
 
-        file_number = 0
         # Keep creating new tar(.gz) as long as there are files left
+        file_number = 0
         while self._is_complete() is False:
             file_number += 1
+            self._new_file_upload(file_number)
 
-            result_filepath = self.target_key
-            if self.min_file_size is not None:
-                # Need to number since the number of files is unknown
-                compression_ext = ''
-                if self.compression_type is not None:
-                    compression_ext = '.' + self.compression_type
+    def _new_file_upload(self, file_number):
+        """Start a new multipart upload for the tar file
 
-                result_filepath = '{}-{}.tar{}'.format(
-                    self.key.rsplit('.tar', 1)[0],
-                    file_number,
-                    compression_ext,
-                )
+        Args:
+            file_number (int): The number of this file getting created
+        """
+        result_filepath = self._get_tar_file_path(file_number)
 
-            logger.info("Creating file {}".format(result_filepath))
-            # Start multipart upload
-            resp = self.s3.create_multipart_upload(
-                Bucket=self.target_bucket,
-                Key=result_filepath,
+        # Start multipart upload
+        mpu = S3MPU(self.s3, self.target_bucket, result_filepath)
+
+        current_file_size = 0
+        # If out of files or min size is met, then complete file
+        while (self._is_complete() is False
+                and (self.min_file_size is None
+                     or current_file_size < self.min_file_size)):
+            current_part_io = self._get_part_contents()
+
+            current_file_size += current_part_io.tell()
+            mpu.upload_part(current_part_io)
+
+        mpu.complete()
+
+    def _get_part_contents(self):
+        """Create multipart upload contents
+        Pull files from file cache and append until file is large enough
+        to be uploaded to s3's multi prt upload
+
+        Returns:
+            BytesIO: io.BytesIO object to be upload
+        """
+        current_io = io.BytesIO()
+        current_size = 0
+        while current_size < MIN_S3_SIZE * 2:
+            source_tar_io = self._get_file_from_cache()
+            if source_tar_io is None:
+                # Must be the end since no more files to add
+                break
+            source_tar_io.seek(0)
+            current_io.write(source_tar_io.read())
+            source_tar_io.close()  # Cleanup
+            # New current size
+            current_size = current_io.tell()
+
+        return current_io
+
+    def _get_file_from_cache(self):
+        """Pull content from the file cache to build a part to get uploaded
+
+        Returns:
+            BytesIO: io.BytesIO object
+        """
+        while self._is_complete() is False:
+            if self.file_cache != []:
+                # Must pop from idx 0
+                # the last item in the file cache has the EOF bytes
+                return self.file_cache.pop(0)
+            time.sleep(0.1)
+
+        return None
+
+    def _get_tar_file_path(self, file_number):
+        """Add file number to tar file if needed
+
+        If its possible that there may need to be multiple tar files,
+        number them so they do not get overwritten.
+        This would happen if self.min_file_size is set
+
+        Args:
+            file_number (int): The number to give the file
+
+        Returns:
+            str: The filename to use in s3
+        """
+        result_filepath = self.target_key
+        if self.min_file_size is not None:
+            # Need to number since the number of files is unknown
+            compression_ext = ''
+            if self.compression_type is not None:
+                compression_ext = '.' + self.compression_type
+
+            result_filepath = '{}-{}.tar{}'.format(
+                result_filepath.rsplit('.tar', 1)[0],
+                file_number,
+                compression_ext,
             )
-
-            parts_mapping = []
-            part_num = 0
-            current_file_size = 0
-            # If out of files or min size is met, then complete file
-            while (self._is_complete() is False
-                    and (self.min_file_size is None
-                         or current_file_size < self.min_file_size)):
-                current_part_io = io.BytesIO()
-                part_num += 1
-                logger.debug("Creating part {} of {}"
-                             .format(part_num, result_filepath))
-                current_part_size = 0
-                while (self._is_complete() is False
-                        and current_part_size < MIN_S3_SIZE * 2):
-                    source_tar_io = self._get_file_from_cache()
-                    source_tar_io.seek(0)
-                    current_part_io.write(source_tar_io.read())
-                    source_tar_io.close()  # Cleanup
-                    # New current size
-                    current_part_size = current_part_io.tell()
-
-                current_file_size += current_part_size
-
-                logger.debug("Uploading part {} of {}"
-                             .format(part_num, result_filepath))
-                current_part_io.seek(0)
-                part_resp = self.s3.upload_part(
-                    Bucket=self.target_bucket,
-                    Key=result_filepath,
-                    PartNumber=part_num,
-                    UploadId=resp['UploadId'],
-                    Body=current_part_io.read(),
-                )
-                current_part_io.close()  # Cleanup
-
-                parts_mapping.append({
-                    'ETag': part_resp['ETag'][1:-1],
-                    'PartNumber': part_num,
-                })
-
-            # Finish
-            self.s3.complete_multipart_upload(
-                Bucket=self.target_bucket,
-                Key=result_filepath,
-                UploadId=resp['UploadId'],
-                MultipartUpload={'Parts': parts_mapping},
-            )
+        return result_filepath
 
     def _is_complete(self):
-        if self.all_keys == [] and self.file_cache == []:
-            return True
-        return False
+        """Are they any files left to be uploaded/tar'd
+
+        Returns:
+            bool: If we can complete this tar'ing process or not
+        """
+        return self.all_keys == [] and self.file_cache == []
 
     def _pre_fetch_files(self):
+        """Started as a background job to keep adding files to the
+        file cache to speed things along
+        """
         # Make sure this is the last file the tar saves, will have EOF bytes
         last_file_key = self.all_keys.pop()
 
         def _fetch(key):
             logger.debug("Adding to cache {}".format(key))
-            self._add_key_to_cache(self.source_bucket, key)
-            if self.save_metadata is True:
-                self._add_metadata_to_cache(self.source_bucket, key)
+            self._add_key_to_cache(key)
 
             while len(self.file_cache) >= self.cache_size:
-                # Hold here until more files are needed
+                # Hold here until more files are needed in the cache
                 time.sleep(0.1)
 
         _threads(self.cache_size, self.all_keys, _fetch)
         # Now add last file (and metadata if needed)
-        if self.save_metadata is True:
-            self._add_metadata_to_cache(self.source_bucket, last_file_key)
         logger.debug("Adding last file to cache {}".format(last_file_key))
-        self._add_key_to_cache(
-            self.source_bucket, last_file_key, is_last_file=False
-        )
+        self._add_key_to_cache(last_file_key, is_last_file=False)
         self.all_keys = []  # clear now that all have been processed
 
-    def _add_key_to_cache(self, bucket, key, is_last_file=False):
+    def _add_key_to_cache(self, key, is_last_file=False):
+        """Get the source of an s3 key (and its metadata if needed) and add
+        it to the file cache
+
+        Args:
+            key (str): the key to download form s3
+            is_last_file (bool, optional): Defaults to False. [description]
+        """
+        if self.save_metadata is True:
+            metadata_io = self._get_tar_source_metadata(key)
+            if metadata_io is not None:
+                logger.debug("Adding metadata file to cache {}".format(key))
+                self.file_cache.append(metadata_io)
+
         self.file_cache.append(
-            self._get_source_data(bucket, key, is_last_file=is_last_file)
+            self._get_tar_source_data(key, is_last_file=is_last_file)
         )
 
-    def _add_metadata_to_cache(self, bucket, key):
-        metadata_io = self._get_source_metadata(bucket, key)
-        if metadata_io is not None:
-            logger.debug("Adding metadata file to cache {}".format(key))
-            self.file_cache.append(metadata_io)
+    def _get_tar_source_data(self, key, is_last_file=False):
+        """Download source file and generate a tar from it
 
-    def _get_source_data(self, bucket, key, is_last_file=False):
-        source_key_io = self._download_source_file(
-            bucket, key
-        )
+        Default the tar file is not closed, unless is_last_file is True
+
+        Args:
+            key (str): File from s3 to download
+            is_last_file (bool, optional): Defaults to False.
+                Close the tar file or not
+
+        Returns:
+            io.BytesIO: BytesIO object of the tar file
+        """
+        source_key_io = self._download_source_file(key)
         source_tar_io = self._save_bytes_to_tar(
             key.split('/')[-1],
             source_key_io,
@@ -191,8 +232,18 @@ class S3Tar:
         source_key_io.close()  # Cleanup
         return source_tar_io
 
-    def _get_source_metadata(self, bucket, key):
-        source_metadata_io = self._download_source_metadata(bucket, key)
+    def _get_tar_source_metadata(self, key):
+        """Get metadata from the s3 file
+        If a file has metadata then add it to a tar file
+        If not, then return None
+
+        Args:
+            key (str): S3 file to get metadata from
+
+        Returns:
+            io.BytesIO|None: BytesIO object of the tar file
+        """
+        source_metadata_io = self._download_source_metadata(key)
         if source_metadata_io is None:
             return None
 
@@ -204,22 +255,33 @@ class S3Tar:
         source_metadata_io.close()  # Cleanup
         return source_metadata_tar_io
 
-    def _get_file_from_cache(self):
-        while True:
-            if self.file_cache != []:
-                # Must pop from idx 0
-                # the last item in the file cache has the EOF bytes
-                return self.file_cache.pop(0)
-            time.sleep(0.1)
+    def _download_source_file(self, key):
+        """Download source file from s3 into a BytesIO object
 
-    def _download_source_file(self, bucket, key):
+        Args:
+            key (str): S3 file to download
+
+        Returns:
+            io.BytesIO: BytesIO object of the contents
+        """
         source_key_io = io.BytesIO()
-        self.s3.download_fileobj(bucket, key, source_key_io)
+        self.s3.download_fileobj(self.source_bucket, key, source_key_io)
         return source_key_io
 
-    def _download_source_metadata(self, bucket, key):
+    def _download_source_metadata(self, key):
+        """Get metadata from an s3 file
+
+        Args:
+            key (str): S3 file to pull metadata from
+
+        Returns:
+            io.BytesIO|None: BytesIO object of the tar file
+        """
         source_metadata_io = io.BytesIO()
-        metadata = self.s3.head_object(Bucket=bucket, Key=key)['Metadata']
+        metadata = self.s3.head_object(
+            Bucket=self.source_bucket,
+            Key=key,
+        )['Metadata']
         if metadata == {}:
             return None
 
@@ -228,6 +290,18 @@ class S3Tar:
 
     @classmethod
     def _save_bytes_to_tar(cls, name, source, mode, close=False):
+        """Convert raw bytes into a tar
+
+        Args:
+            name (str): Filename inside the tar
+            source (io.BytesIO): The data to be saved into the tar
+            mode (str): The file mode in which to open the tar file
+            close (bool, optional): Defaults to False.
+                Should the tar file contain EOF bytes
+
+        Returns:
+            io.BytesIO: BytesIO object of the tar'd data
+        """
         source_tar_io = io.BytesIO()
         tar = tarfile.open(fileobj=source_tar_io, mode=mode)
         info = tarfile.TarInfo(name=name)
@@ -246,7 +320,13 @@ class S3Tar:
         return source_tar_io
 
     def add_files(self, prefix):
+        """Add s3 files from a directory inside the source bucket
 
+        self.all_keys gets added to directly
+
+        Args:
+            prefix (str): Folder path inside the source bucket
+        """
         def resp_to_filelist(resp):
             return [(x['Key']) for x in resp['Contents']]
 
@@ -272,5 +352,12 @@ class S3Tar:
         self.all_keys.extend(objects_list)
 
     def add_file(self, key):
+        """Add a single file at a time to be tar'd
+
+        self.all_keys gets added to directly
+
+        Args:
+            key (str): The full path to a single s3 file in the source bucket
+        """
         # TODO make sure key exists, if not log error and do not break
         self.all_keys.append(key)
