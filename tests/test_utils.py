@@ -1,3 +1,4 @@
+import pytest
 from s3_tar.utils import _convert_to_bytes
 
 
@@ -31,4 +32,5 @@ def test_convert_tb():
 
 
 def test_convert_bad_input():
-    assert _convert_to_bytes('1TB') == 1099511627776
+    with pytest.raises(ValueError):
+        _convert_to_bytes('1xy')
