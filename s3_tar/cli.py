@@ -8,9 +8,9 @@ logging.basicConfig(
     format='%(message)s',
 )
 
-logging.getLogger('s3_tar.s3_tar').setLevel(
-    os.getenv('S3_TAR_LOG_LEVEL', 'INFO').upper()
-)
+log_level = os.getenv('S3_TAR_LOG_LEVEL', 'INFO').upper()
+logging.getLogger('s3_tar.s3_tar').setLevel(log_level)
+logging.getLogger('s3_tar.s3_mpu').setLevel(log_level)
 
 
 def cli():

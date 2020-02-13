@@ -25,12 +25,15 @@ def _threads(num_threads, data, callback, *args, **kwargs):
     def _thread_run():
         while True:
             item = q.get()
-            for _ in range(3):
+            for i in range(3):
                 # re try 3 times before giving up
                 try:
                     response = callback(item, *args, **kwargs)
                 except Exception:
                     logger.exception("Retry failed batch of: {}".format(item))
+                    # add on the last try
+                    if i == 2:
+                        item_list.append(None)
                 else:
                     item_list.append(response)
                     break

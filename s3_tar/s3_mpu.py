@@ -16,14 +16,26 @@ class S3MPU:
             Bucket=self.target_bucket,
             Key=self.target_key,
         )
+        logger.debug("Multipart upload start: {}".format(self.resp))
 
     def upload_part(self, source_io):
+        """Upload a part of the multipart upload
+
+        Save to a parts mapping, needed to complete the multipart upload
+
+        Args:
+            source_io (io.BytesIO): BytesIO object to upload
+
+        Returns:
+            bool: If the upload was successful
+        """
+
         part_num = len(self.parts_mapping) + 1
         logger.debug("Uploading part {} of {}"
                      .format(part_num, self.target_key))
 
         source_io.seek(0)
-        part_resp = self.s3.upload_part(
+        resp = self.s3.upload_part(
             Bucket=self.target_bucket,
             Key=self.target_key,
             PartNumber=part_num,
@@ -31,17 +43,30 @@ class S3MPU:
             Body=source_io.read(),
         )
         source_io.close()  # Cleanup
+        logger.debug("Multipart upload part: {}".format(resp))
 
-        self.parts_mapping.append({
-            'ETag': part_resp['ETag'][1:-1],  # trim the double quotes
-            'PartNumber': part_num,
-        })
+        if resp['ResponseMetadata']['HTTPStatusCode'] == 200:
+            self.parts_mapping.append({
+                'ETag': resp['ETag'][1:-1],  # trim the double quotes
+                'PartNumber': part_num,
+            })
+            return True
+
+        return False
 
     def complete(self):
+        """Complete to multipart upload in s3
+
+        Returns:
+            bool: If the upload was successful
+        """
+
         # Finish
-        self.s3.complete_multipart_upload(
+        resp = self.s3.complete_multipart_upload(
             Bucket=self.target_bucket,
             Key=self.target_key,
             UploadId=self.resp['UploadId'],
             MultipartUpload={'Parts': self.parts_mapping},
         )
+        logger.debug("Multipart upload complete: {}".format(resp))
+        return resp['ResponseMetadata']['HTTPStatusCode'] == 200
