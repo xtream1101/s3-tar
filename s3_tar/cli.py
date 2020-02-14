@@ -13,7 +13,7 @@ logging.getLogger('s3_tar.s3_tar').setLevel(log_level)
 logging.getLogger('s3_tar.s3_mpu').setLevel(log_level)
 
 
-def cli():
+def create_parser():
     parser = argparse.ArgumentParser(
         description='Tar (and compress) files in s3'
     )
@@ -57,8 +57,13 @@ def cli():
         type=int,
         default=5,
     )
-    args = parser.parse_args()
 
+    return parser
+
+
+def cli():
+    # No need to run testson these. They are tested separately
+    args = create_parser().parse_args()  # pragma: no cover
     job = S3Tar(
         args.source_bucket,
         args.filename,
@@ -66,6 +71,6 @@ def cli():
         cache_size=args.cache_size,
         min_file_size=args.min_filesize,
         save_metadata=args.save_metadata,
-    )
-    job.add_files(args.folder)
-    job.tar()
+    )  # pragma: no cover
+    job.add_files(args.folder)  # pragma: no cover
+    job.tar()  # pragma: no cover

@@ -45,9 +45,10 @@ class S3MPU:
         source_io.close()  # Cleanup
         logger.debug("Multipart upload part: {}".format(resp))
 
-        if resp['ResponseMetadata']['HTTPStatusCode'] == 200:
+        resp_status_code = resp['ResponseMetadata']['HTTPStatusCode']
+        if resp_status_code == 200:
             self.parts_mapping.append({
-                'ETag': resp['ETag'][1:-1],  # trim the double quotes
+                'ETag': resp['ETag'],
                 'PartNumber': part_num,
             })
             return True
@@ -60,8 +61,6 @@ class S3MPU:
         Returns:
             bool: If the upload was successful
         """
-
-        # Finish
         resp = self.s3.complete_multipart_upload(
             Bucket=self.target_bucket,
             Key=self.target_key,
