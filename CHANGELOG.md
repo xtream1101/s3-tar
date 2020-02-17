@@ -2,8 +2,10 @@
 
 
 ### 0.1.5
-- Added tests
+- Added `--remove` which when set will delete all files that were added to the tar file
 - Refactored the S3Tar class to be easier to work with/test
+- Added tests
+- ....
 
 
 ### 0.1.4

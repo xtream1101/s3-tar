@@ -45,6 +45,11 @@ def create_parser():
         action='store_true',
     )
     parser.add_argument(
+        "--remove",
+        help="Delete files that were added to the tar file",
+        action='store_true',
+    )
+    parser.add_argument(
         "--min-filesize",
         help=("Use to create multiple files if needed."
               " Min filesize of the tar'd files"
@@ -70,6 +75,7 @@ def cli():
         target_bucket=args.target_bucket,
         cache_size=args.cache_size,
         min_file_size=args.min_filesize,
+        remove_keys=args.remove,
         save_metadata=args.save_metadata,
     )  # pragma: no cover
     job.add_files(args.folder)  # pragma: no cover

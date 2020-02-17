@@ -18,6 +18,7 @@ class S3Tar:
                  min_file_size=None,
                  cache_size=5,
                  save_metadata=False,
+                 remove_keys=False,
                  session=boto3.session.Session()):
         self.source_bucket = source_bucket
         self.target_bucket = target_bucket
@@ -53,6 +54,8 @@ class S3Tar:
             self.mode += '|' + self.compression_type
 
         self.all_keys = []  # Keys the user adds
+        self.keys_to_delete = []  # Keys to delete once the tar'ing is complete
+        self.remove_keys = remove_keys
         self.file_cache = []  # io objects that are ready to be combined
         self.cache_size = cache_size
         if self.cache_size is None or self.cache_size <= 0:
@@ -73,6 +76,26 @@ class S3Tar:
         while self._is_complete() is False:
             file_number += 1
             self._new_file_upload(file_number)
+
+        self._cleanup()
+
+    def _cleanup(self):
+        """Remove source keys from s3
+        """
+        if self.remove_keys is True:
+            logger.info("Removing all keys added to this tar...")
+
+            while self.keys_to_delete != []:
+                delete_these = []
+                while len(delete_these) < 1000 and self.keys_to_delete != []:
+                    delete_these.append({'Key': self.keys_to_delete.pop(0)})
+                logger.debug("Removing {} keys from {}"
+                             .format(len(delete_these), self.source_bucket))
+                resp = self.s3.delete_objects(
+                    Bucket=self.source_bucket,
+                    Delete={'Objects': delete_these}
+                )
+                logger.debug("Delete objects response: {}".format(resp))
 
     def _new_file_upload(self, file_number):
         """Start a new multipart upload for the tar file
@@ -183,6 +206,7 @@ class S3Tar:
             self._add_key_to_cache(key)
 
         _threads(self.cache_size, self.all_keys, _fetch)
+        self.keys_to_delete = self.all_keys.copy()
         self.all_keys = []  # clear now that all have been processed
 
     def _add_key_to_cache(self, key):
