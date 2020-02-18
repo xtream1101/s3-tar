@@ -2,8 +2,8 @@ import io
 import boto3
 import pytest
 from moto import mock_s3
-from s3_tar.s3_mpu import S3MPU
 import botocore.exceptions
+from s3_tar.s3_mpu import S3MPU
 
 
 @mock_s3()

@@ -53,7 +53,7 @@ class S3Tar:
         if self.compression_type is not None:
             self.mode += '|' + self.compression_type
 
-        self.all_keys = []  # Keys the user adds
+        self.all_keys = set()  # Keys the user adds
         self.keys_to_delete = []  # Keys to delete once the tar'ing is complete
         self.remove_keys = remove_keys
         self.file_cache = []  # io objects that are ready to be combined
@@ -191,7 +191,7 @@ class S3Tar:
         Returns:
             bool: If we can complete this tar'ing process or not
         """
-        return self.all_keys == [] and self.file_cache == []
+        return self.all_keys == set() and self.file_cache == []
 
     def _pre_fetch_files(self):
         """Started as a background job to keep adding files to the
@@ -207,7 +207,7 @@ class S3Tar:
 
         _threads(self.cache_size, self.all_keys, _fetch)
         self.keys_to_delete = self.all_keys.copy()
-        self.all_keys = []  # clear now that all have been processed
+        self.all_keys = set()  # clear now that all have been processed
 
     def _add_key_to_cache(self, key):
         """Get the source of an s3 key (and its metadata if needed) and add
@@ -337,11 +337,15 @@ class S3Tar:
         def resp_to_filelist(resp):
             return [(x['Key']) for x in resp['Contents']]
 
-        objects_list = []
+        objects_list = set()
         logger.info("Gathering files from folder {}".format(prefix))
         resp = self.s3.list_objects_v2(Bucket=self.source_bucket, Prefix=prefix)
-        objects_list.extend(resp_to_filelist(resp))
-        objects_list.remove(prefix)  # Do not add the prefix as a file
+        if resp['KeyCount'] == 0:
+            logger.warning("No files found in the prefix {}".format(prefix))
+            return
+        objects_list |= set(resp_to_filelist(resp))
+        if prefix in objects_list:
+            objects_list.remove(prefix)  # Do not add the prefix as a file
         logger.debug("Found {} objects so far...".format(len(objects_list)))
         while resp['IsTruncated']:
             last_key = objects_list[-1]
@@ -350,13 +354,13 @@ class S3Tar:
                 Prefix=prefix,
                 Marker=last_key,
             )
-            objects_list.extend(resp_to_filelist(resp))
+            objects_list |= set(resp_to_filelist(resp))
             logger.debug("Found {} objects so far...".format(len(objects_list)))
 
         logger.info("Found {} objects in the folder '{}'"
                     .format(len(objects_list),
                             prefix))
-        self.all_keys.extend(objects_list)
+        self.all_keys |= objects_list
 
     def add_file(self, key):
         """Add a single file at a time to be tar'd
@@ -367,4 +371,4 @@ class S3Tar:
             key (str): The full path to a single s3 file in the source bucket
         """
         # TODO make sure key exists, if not log error and do not break
-        self.all_keys.append(key)
+        self.all_keys.add(key)
