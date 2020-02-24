@@ -2,6 +2,7 @@ import os
 import re
 import queue
 import logging
+import botocore
 import threading
 
 logger = logging.getLogger(__name__)
@@ -14,8 +15,12 @@ TB = KB**4
 MIN_S3_SIZE = 5 * MB
 
 
-def _create_s3_client(session):
-    return session.client('s3', endpoint_url=os.getenv('S3_ENDPOINT_URL'))
+def _create_s3_client(session, pool_size=10):
+    return session.client(
+        's3',
+        endpoint_url=os.getenv('S3_ENDPOINT_URL'),
+        config=botocore.client.Config(max_pool_connections=pool_size),
+    )
 
 
 def _threads(num_threads, data, callback, *args, **kwargs):

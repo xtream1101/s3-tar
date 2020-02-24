@@ -1,6 +1,11 @@
 # Change log
 
 
+### 0.1.6
+- Option to preserve folder structure. Also add files to a custom folder 
+- Fixed connection pool bug to s3
+
+
 ### 0.1.5
 - Added `--remove` which when set will delete all files that were added to the tar file
 - Refactored the S3Tar class to be easier to work with/test

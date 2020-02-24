@@ -31,8 +31,8 @@ class S3MPU:
         """
 
         part_num = len(self.parts_mapping) + 1
-        logger.debug("Uploading part {} of {}"
-                     .format(part_num, self.target_key))
+        logger.info("Uploading part {} of {}"
+                    .format(part_num, self.target_key))
 
         source_io.seek(0)
         resp = self.s3.upload_part(
