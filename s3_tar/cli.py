@@ -50,6 +50,16 @@ def create_parser():
         action='store_true',
     )
     parser.add_argument(
+        "--preserve-paths",
+        help="Preserve the path layout relative to the input folder",
+        action='store_true',
+    )
+    parser.add_argument(
+        "--allow-dups",
+        help="Allow duplicate filenames to be saved into the tar file",
+        action='store_true',
+    )
+    parser.add_argument(
         "--min-filesize",
         help=("Use to create multiple files if needed."
               " Min filesize of the tar'd files"
@@ -77,6 +87,10 @@ def cli():
         min_file_size=args.min_filesize,
         remove_keys=args.remove,
         save_metadata=args.save_metadata,
+        allow_dups=args.allow_dups,
     )  # pragma: no cover
-    job.add_files(args.folder)  # pragma: no cover
+    job.add_files(
+        args.folder,
+        preserve_paths=args.preserve_paths,
+    )  # pragma: no cover
     job.tar()  # pragma: no cover

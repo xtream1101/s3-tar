@@ -1,5 +1,6 @@
 import io
 import boto3
+import pytest
 from s3_tar import S3Tar
 from moto import mock_s3
 
@@ -10,17 +11,42 @@ from moto import mock_s3
 def test_add_file():
     tar = S3Tar('my-bucket', 'my-data.tar')
     tar.add_file('this_is_a/test.file')
-    tar.add_file('this_is_a/test.file')  # make sure it de-dups
+    tar.add_file('this_is_a/test.file')  # make sure it de-dups for same key
+    tar.add_file('this_is_another/test.file', folder='in/here')
+
+    assert tar.all_keys == {('test.file', 'this_is_a/test.file'),
+                            ('in/here/test.file', 'this_is_another/test.file')}
+
+
+def test_add_file_dup_member_name_fail():
+    tar = S3Tar('my-bucket', 'my-data.tar')
+    tar.add_file('this_is_a/test.file')
+    tar.add_file('this_is_a/test.file')  # Fine sine the key is a dup
+
+    # Test the logic on how keys are checked, this should be fine
+    tar.add_file('person.txt')
+    tar.add_file('son.txt')
+
+    # Raise exception since the member name is a dup with diff key
+    with pytest.raises(ValueError):
+        tar.add_file('this_is_another/test.file')
+
+
+def test_add_file_dup_member_name_allow():
+    tar = S3Tar('my-bucket', 'my-data.tar', allow_dups=True)
+    tar.add_file('this_is_a/test.file')
+    tar.add_file('this_is_a/test.file')  # Fine sine the key is a dup
     tar.add_file('this_is_another/test.file')
 
-    assert tar.all_keys == {'this_is_a/test.file', 'this_is_another/test.file'}
+    assert tar.all_keys == {('test.file', 'this_is_a/test.file'),
+                            ('test.file', 'this_is_another/test.file')}
 
 
 ###
 # add_files
 ###
 @mock_s3
-def test_add_files_no_dups():
+def test_add_files_dedup_allow():
     session = boto3.session.Session()
     s3 = session.client('s3')
     # Need to create the bucket since this is in Moto's 'virtual' AWS account
@@ -35,12 +61,78 @@ def test_add_files_no_dups():
         Key='some_folder/thing2.txt',
         Body=b'Test File Contents',
     )
+    s3.put_object(
+        Bucket='my-bucket',
+        Key='different_folder/thing2.txt',
+        Body=b'Test File Contents',
+    )
 
-    tar = S3Tar('my-bucket', 'my-data.tar', session=session)
+    tar = S3Tar('my-bucket', 'my-data.tar',
+                allow_dups=True, session=session)
     tar.add_files('some_folder')
     tar.add_files('some_folder')  # make sure it de-dups
+    tar.add_files('different_folder')
 
-    assert tar.all_keys == {'some_folder/thing1.txt', 'some_folder/thing2.txt'}
+    assert tar.all_keys == {('thing1.txt', 'some_folder/thing1.txt'),
+                            ('thing2.txt', 'some_folder/thing2.txt'),
+                            ('thing2.txt', 'different_folder/thing2.txt')}
+
+
+@mock_s3
+def test_add_files_dedup_fail():
+    session = boto3.session.Session()
+    s3 = session.client('s3')
+    # Need to create the bucket since this is in Moto's 'virtual' AWS account
+    s3.create_bucket(Bucket='my-bucket')
+    s3.put_object(
+        Bucket='my-bucket',
+        Key='some_folder/thing1.txt',
+        Body=b'Test File Contents',
+    )
+    s3.put_object(
+        Bucket='my-bucket',
+        Key='some_folder/thing2.txt',
+        Body=b'Test File Contents',
+    )
+    s3.put_object(
+        Bucket='my-bucket',
+        Key='different_folder/thing2.txt',
+        Body=b'Test File Contents',
+    )
+
+    tar = S3Tar('my-bucket', 'my-data.tar',
+                allow_dups=False, session=session)
+    tar.add_files('some_folder')
+    tar.add_files('some_folder')  # make sure it de-dups
+    with pytest.raises(ValueError):
+        tar.add_files('different_folder')
+
+
+@mock_s3
+def test_add_files_folders():
+    session = boto3.session.Session()
+    s3 = session.client('s3')
+    # Need to create the bucket since this is in Moto's 'virtual' AWS account
+    s3.create_bucket(Bucket='my-bucket')
+    s3.put_object(
+        Bucket='my-bucket',
+        Key='some_folder/thing1.txt',
+        Body=b'Test File Contents',
+    )
+    s3.put_object(
+        Bucket='my-bucket',
+        Key='some_folder/foo/thing2.txt',
+        Body=b'Test File Contents',
+    )
+
+    tar = S3Tar('my-bucket', 'my-data.tar', session=session)
+    tar.add_files('some_folder/', folder='my_data', preserve_paths=True)
+
+    output = {
+        ('my_data/thing1.txt', 'some_folder/thing1.txt'),
+        ('my_data/foo/thing2.txt', 'some_folder/foo/thing2.txt'),
+    }
+    assert tar.all_keys == output
 
 
 @mock_s3
@@ -122,6 +214,47 @@ def test_download_source_file():
 
 
 ###
+# _add_key_to_cache
+###
+@mock_s3
+def test_add_key_to_cache_with_metadata():
+    session = boto3.session.Session()
+    s3 = session.client('s3')
+    # Need to create the bucket since this is in Moto's 'virtual' AWS account
+    s3.create_bucket(Bucket='my-bucket')
+    s3.put_object(
+        Bucket='my-bucket',
+        Key='thing1.txt',
+        Body=b'Test File Contents',
+        Metadata={'foo': 'bar'},
+    )
+    tar = S3Tar('my-bucket', 'my-data.tar',
+                save_metadata=True, session=session)
+    tar._add_key_to_cache('thing1.txt', 'thing1.txt')
+
+    assert len(tar.file_cache) == 2
+
+
+@mock_s3
+def test_add_key_to_cache_no_metadata():
+    session = boto3.session.Session()
+    s3 = session.client('s3')
+    # Need to create the bucket since this is in Moto's 'virtual' AWS account
+    s3.create_bucket(Bucket='my-bucket')
+    s3.put_object(
+        Bucket='my-bucket',
+        Key='thing1.txt',
+        Body=b'Test File Contents',
+        Metadata={'foo': 'bar'},
+    )
+    tar = S3Tar('my-bucket', 'my-data.tar',
+                save_metadata=False, session=session)
+    tar._add_key_to_cache('thing1.txt', 'thing1.txt')
+
+    assert len(tar.file_cache) == 1
+
+
+###
 # _get_tar_source_metadata
 ###
 @mock_s3
@@ -138,13 +271,15 @@ def test_get_tar_source_metadata_has():
         Metadata={'foo': 'bar'},
     )
     tar = S3Tar('my-bucket', 'my-data.tar', session=session)
-    tar_io = tar._get_tar_source_metadata('thing1.txt')
+    tar_io = tar._get_tar_source_metadata(
+        'my_things/data/thing1.txt', 'thing1.txt'
+    )
     # Test that the fn is not seeking to 0
     assert tar_io.tell() != 0
 
     tar_io.seek(0)
     tar_obj = tarfile.open(fileobj=tar_io, mode='r')
-    assert tar_obj.getmember('thing1.txt.metadata.json')
+    assert tar_obj.getmember('my_things/data/thing1.txt.metadata.json')
 
 
 @mock_s3
@@ -159,7 +294,7 @@ def test_get_tar_source_metadata_none():
         Body=b'Test File Contents',
     )
     tar = S3Tar('my-bucket', 'my-data.tar', session=session)
-    tar_io = tar._get_tar_source_metadata('thing1.txt')
+    tar_io = tar._get_tar_source_metadata('thing1.txt', 'thing1.txt')
     assert tar_io is None
 
 
@@ -179,13 +314,13 @@ def test_get_tar_source_data():
         Body=b'Test File Contents',
     )
     tar = S3Tar('my-bucket', 'my-data.tar', session=session)
-    tar_io = tar._get_tar_source_data('thing1.txt')
+    tar_io = tar._get_tar_source_data('mydata/thing1.txt', 'thing1.txt')
     # Test that the fn is not seeking to 0
     assert tar_io.tell() != 0
 
     tar_io.seek(0)
     tar_obj = tarfile.open(fileobj=tar_io, mode='r')
-    assert tar_obj.getmember('thing1.txt')
+    assert tar_obj.getmember('mydata/thing1.txt')
 
 
 ###
