@@ -56,7 +56,7 @@ class S3Tar:
             self.mode += '|' + self.compression_type
 
         self.all_keys = set()  # Keys the user adds
-        self.keys_to_delete = []  # Keys to delete once the tar'ing is complete
+        self.keys_to_delete = set()  # Keys to delete one cleanup
         self.remove_keys = remove_keys
         self.file_cache = []  # io objects that are ready to be combined
         self.cache_size = cache_size
@@ -87,10 +87,10 @@ class S3Tar:
         if self.remove_keys is True:
             logger.info("Removing all keys added to this tar...")
 
-            while self.keys_to_delete != []:
+            while len(self.keys_to_delete) > 0:
                 delete_these = []
-                while len(delete_these) < 1000 and self.keys_to_delete != []:
-                    delete_these.append({'Key': self.keys_to_delete.pop()})
+                while len(delete_these) < 1000 and len(self.keys_to_delete) > 0:
+                    delete_these.append({'Key': self.keys_to_delete.pop()[1]})
                 logger.debug("Removing {} keys from {}"
                              .format(len(delete_these), self.source_bucket))
                 resp = self.s3.delete_objects(

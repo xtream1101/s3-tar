@@ -1,7 +1,7 @@
 # Change log
 
 
-### 0.1.8
+### 0.1.9
 - Fixed bug when deleting files
 
 
