@@ -90,7 +90,7 @@ class S3Tar:
             while self.keys_to_delete != []:
                 delete_these = []
                 while len(delete_these) < 1000 and self.keys_to_delete != []:
-                    delete_these.append({'Key': self.keys_to_delete.pop(0)})
+                    delete_these.append({'Key': self.keys_to_delete.pop()})
                 logger.debug("Removing {} keys from {}"
                              .format(len(delete_these), self.source_bucket))
                 resp = self.s3.delete_objects(

@@ -1,6 +1,10 @@
 # Change log
 
 
+### 0.1.8
+- Fixed bug when deleting files
+
+
 ### 0.1.7
 - Clean up old threads after tar'ing is complete
 - Close s3 connections after tar'ing is complete
