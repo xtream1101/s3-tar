@@ -30,6 +30,9 @@ def _threads(num_threads, data, callback, *args, **kwargs):
     def _thread_run():
         while True:
             item = q.get()
+            if item is None:
+                break
+
             for i in range(3):
                 # re try 3 times before giving up
                 try:
@@ -45,17 +48,25 @@ def _threads(num_threads, data, callback, *args, **kwargs):
 
             q.task_done()
 
+    threads = []
     for i in range(num_threads):
         t = threading.Thread(target=_thread_run)
         t.daemon = True
         t.start()
+        threads.append(t)
 
     # Fill the Queue with the data to process
     for item in data:
         q.put(item)
 
-    # Start processing the data
+    # Start processing the data & block until complete
     q.join()
+
+    # Stop and cleanup workers
+    for i in range(num_threads):
+        q.put(None)
+    for t in threads:
+        t.join()
 
     return item_list
 

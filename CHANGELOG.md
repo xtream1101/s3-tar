@@ -1,6 +1,11 @@
 # Change log
 
 
+### 0.1.7
+- Clean up old threads after tar'ing is complete
+- Close s3 connections after tar'ing is complete
+
+
 ### 0.1.6
 - Option to preserve folder structure. Also add files to a custom folder 
 - Fixed connection pool bug to s3

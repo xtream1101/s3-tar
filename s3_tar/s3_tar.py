@@ -21,7 +21,6 @@ class S3Tar:
                  remove_keys=False,
                  allow_dups=False,
                  session=boto3.session.Session()):
-
         self.allow_dups = allow_dups
         self.source_bucket = source_bucket
         self.target_bucket = target_bucket
@@ -99,6 +98,9 @@ class S3Tar:
                     Delete={'Objects': delete_these}
                 )
                 logger.debug("Delete objects response: {}".format(resp))
+
+        # TODO: Clear the whole class
+        self.s3 = None  # Clear all current connections
 
     def _new_file_upload(self, file_number):
         """Start a new multipart upload for the tar file
