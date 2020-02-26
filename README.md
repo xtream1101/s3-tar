@@ -12,7 +12,10 @@ Create a `tar`/`tar.gz`/`tar.bz2` file from many s3 files and stream back into s
 
 ## Usage
 
-Set the environment variable `S3_ENDPOINT_URL` to use a custom s3 host (minio/etc...)
+Set the environment variable `S3_ENDPOINT_URL` to use a custom s3 host (minio/etc...)  
+
+This will use very little RAM. As it downloads files, it streams up the tar'd pieces as it goes.  
+You can use more or less ram by playing with the options `cache_size` & `part_size_multiplier`.  
 
 
 ### Command Line
@@ -33,7 +36,8 @@ job = S3Tar(
     # cache_size=5,  # Default 5. Number of files to hold in memory to be processed
     # save_metadata=False,  # If True, and the file has metadata, save a file with the same name using the suffix of `.metadata.json`
     # remove_keys=False,  # If True, will delete s3 files after the tar is created
-    # allow_dups=False,  # When False, will raise ValueError if a file will overwrite another in the tar file, set to True to ignore 
+    # allow_dups=False,  # When False, will raise ValueError if a file will overwrite another in the tar file, set to True to ignore
+    # part_size_multiplier=10,  # is multiplied by 5 MB to find how large each part that gets upload should be
     # session=boto3.session.Session(),  # For custom aws session
 )
 # Add files, can call multiple times to add files from other directories

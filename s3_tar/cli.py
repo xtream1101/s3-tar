@@ -72,6 +72,12 @@ def create_parser():
         type=int,
         default=5,
     )
+    parser.add_argument(
+        "--part-size-multiplier",
+        help="Multiplied by 5MB to set the max size of each upload chunk",
+        type=int,
+        default=10,
+    )
 
     return parser
 
@@ -88,6 +94,7 @@ def cli():
         remove_keys=args.remove,
         save_metadata=args.save_metadata,
         allow_dups=args.allow_dups,
+        part_size_multiplier=args.part_size_multiplier,
     )  # pragma: no cover
     job.add_files(
         args.folder,

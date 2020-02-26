@@ -1,6 +1,10 @@
 # Change log
 
 
+### 0.1.10
+- Added `--part-size-multiplier`, which allows you to set the size of each uploaded chunk
+
+
 ### 0.1.9
 - Fixed bug when deleting files
 

@@ -20,6 +20,7 @@ class S3Tar:
                  save_metadata=False,
                  remove_keys=False,
                  allow_dups=False,
+                 part_size_multiplier=None,
                  session=boto3.session.Session()):
         self.allow_dups = allow_dups
         self.source_bucket = source_bucket
@@ -54,6 +55,16 @@ class S3Tar:
         self.mode = 'w'
         if self.compression_type is not None:
             self.mode += '|' + self.compression_type
+
+        if part_size_multiplier is None:
+            self.part_size_multiplier = 10
+        else:
+            if (not isinstance(part_size_multiplier, int)
+                    or int(part_size_multiplier) <= 0):
+                logger.warning("Part size multiplier must be >= 0."
+                               " Defaulting to 10")
+                self.part_size_multiplier = 10
+            self.part_size_multiplier = part_size_multiplier
 
         self.all_keys = set()  # Keys the user adds
         self.keys_to_delete = set()  # Keys to delete one cleanup
@@ -135,7 +146,7 @@ class S3Tar:
         """
         current_io = io.BytesIO()
         current_size = 0
-        while current_size < MIN_S3_SIZE * 2:
+        while current_size < MIN_S3_SIZE * self.part_size_multiplier:
             source_tar_io = self._get_file_from_cache()
             if source_tar_io is None:
                 # Must be the end since no more files to add
