@@ -23,12 +23,6 @@ def create_parser():
         required=True,
     )
     parser.add_argument(
-        "--target-bucket",
-        help=("Bucket that the tar will be saved to."
-              " Only needed if different then source bucket"),
-        default=None,
-    )
-    parser.add_argument(
         "--folder",
         help="folder whose contents should be combined",
         required=True,
@@ -38,6 +32,19 @@ def create_parser():
         help=("Output filename for the tar file."
               "\nExtension: tar, tar.gz, or tar.bz2"),
         required=True,
+    )
+    parser.add_argument(
+        "--target-bucket",
+        help=("Bucket that the tar will be saved to."
+              " Only needed if different then source bucket"),
+        default=None,
+    )
+    parser.add_argument(
+        "--min-filesize",
+        help=("Use to create multiple files if needed."
+              " Min filesize of the tar'd files"
+              " in [B,KB,MB,GB,TB]. e.x. 5.2GB"),
+        default=None,
     )
     parser.add_argument(
         "--save-metadata",
@@ -54,27 +61,29 @@ def create_parser():
         help="Preserve the path layout relative to the input folder",
         action='store_true',
     )
+    # ADVANCED USAGE
     parser.add_argument(
         "--allow-dups",
-        help="Allow duplicate filenames to be saved into the tar file",
+        help=("ADVANCED: Allow duplicate filenames to be"
+              " saved into the tar file"),
         action='store_true',
     )
     parser.add_argument(
-        "--min-filesize",
-        help=("Use to create multiple files if needed."
-              " Min filesize of the tar'd files"
-              " in [B,KB,MB,GB,TB]. e.x. 5.2GB"),
-        default=None,
-    )
-    parser.add_argument(
         "--cache-size",
-        help="Number of files to download into memory at a time",
+        help="ADVANCED: Number of files to download into memory at a time",
         type=int,
         default=5,
     )
     parser.add_argument(
+        "--s3-max-retries",
+        help="ADVANCED: Max retries for each request the s3 client makes",
+        type=int,
+        default=4,
+    )
+    parser.add_argument(
         "--part-size-multiplier",
-        help="Multiplied by 5MB to set the max size of each upload chunk",
+        help=("ADVANCED: Multiplied by 5MB to set the max"
+              " size of each upload chunk"),
         type=int,
         default=10,
     )
@@ -94,6 +103,7 @@ def cli():
         remove_keys=args.remove,
         save_metadata=args.save_metadata,
         allow_dups=args.allow_dups,
+        s3_max_retries=args.s3_max_retries,
         part_size_multiplier=args.part_size_multiplier,
     )  # pragma: no cover
     job.add_files(

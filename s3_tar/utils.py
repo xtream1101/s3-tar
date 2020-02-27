@@ -15,11 +15,17 @@ TB = KB**4
 MIN_S3_SIZE = 5 * MB
 
 
-def _create_s3_client(session, pool_size=10):
+def _create_s3_client(session, pool_size=10, max_retries=4):
+    config = botocore.client.Config(
+        max_pool_connections=pool_size,
+        retries=dict(
+            max_attempts=max_retries,
+        ),
+    )
     return session.client(
         's3',
         endpoint_url=os.getenv('S3_ENDPOINT_URL'),
-        config=botocore.client.Config(max_pool_connections=pool_size),
+        config=config,
     )
 
 

@@ -33,10 +33,13 @@ job = S3Tar(
     'FILE_TO_SAVE_TO.tar',  # Use `tar.gz` or `tar.bz2` to enable compression
     # target_bucket=None,  # Default: source bucket. Can be used to save the archive into a different bucket
     # min_file_size='50MB',  # Default: None. The min size to make each tar file [B,KB,MB,GB,TB]. If set, a number will be added to each file name
-    # cache_size=5,  # Default 5. Number of files to hold in memory to be processed
     # save_metadata=False,  # If True, and the file has metadata, save a file with the same name using the suffix of `.metadata.json`
     # remove_keys=False,  # If True, will delete s3 files after the tar is created
+  
+    # ADVANCED USAGE
     # allow_dups=False,  # When False, will raise ValueError if a file will overwrite another in the tar file, set to True to ignore
+    # cache_size=5,  # Default 5. Number of files to hold in memory to be processed
+    # s3_max_retries=4,  # Default is 4. This value is passed into boto3.client's s3 botocore config as the `max_attempts`
     # part_size_multiplier=10,  # is multiplied by 5 MB to find how large each part that gets upload should be
     # session=boto3.session.Session(),  # For custom aws session
 )

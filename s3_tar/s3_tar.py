@@ -20,6 +20,7 @@ class S3Tar:
                  save_metadata=False,
                  remove_keys=False,
                  allow_dups=False,
+                 s3_max_retries=None,
                  part_size_multiplier=None,
                  session=boto3.session.Session()):
         self.allow_dups = allow_dups
@@ -74,7 +75,15 @@ class S3Tar:
         if self.cache_size is None or self.cache_size <= 0:
             raise ValueError("cache size must be 1 or larger")
 
-        self.s3 = _create_s3_client(session, self.cache_size * 2)
+        self.s3_max_retries = s3_max_retries
+        if self.s3_max_retries is None or self.s3_max_retries <= 0:
+            raise ValueError("s3 max retries must be 1 or larger")
+
+        self.s3 = _create_s3_client(
+            session,
+            pool_size=self.cache_size * 2,
+            max_retries=self.s3_max_retries,
+        )
 
     def tar(self):
         """Start the tar'ing process with what has been added

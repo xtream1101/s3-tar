@@ -1,6 +1,10 @@
 # Change log
 
 
+### 0.1.11
+- Added `--s3-max-retries` for the s3 client. Default is 4
+
+
 ### 0.1.10
 - Added `--part-size-multiplier`, which allows you to set the size of each uploaded chunk
 
