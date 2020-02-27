@@ -20,7 +20,7 @@ class S3Tar:
                  save_metadata=False,
                  remove_keys=False,
                  allow_dups=False,
-                 s3_max_retries=None,
+                 s3_max_retries=4,
                  part_size_multiplier=None,
                  session=boto3.session.Session()):
         self.allow_dups = allow_dups
