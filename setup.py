@@ -7,7 +7,7 @@ with open('README.md', 'r') as f:
 setup(
     name='s3-tar',
     packages=['s3_tar'],
-    version='0.1.11',
+    version='0.1.12',
     description='Tar (and compress) files in s3',
     long_description=long_description,
     long_description_content_type='text/markdown',
