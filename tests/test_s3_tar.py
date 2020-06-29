@@ -335,8 +335,8 @@ def test_bytes_to_tar_output_tar():
     tar = S3Tar('my-bucket', 'my-data.tar')
     source_io = io.BytesIO()
     source_io.write(b'Beep boop')
-    output = tar._save_bytes_to_tar('test.tar', source_io, 1593457982.0115657, 'w')
-    assert output.tell() == 2048
+    output = tar._save_bytes_to_tar('test.tar', source_io, 1593457982, 'w')
+    assert output.tell() == 1024
 
 
 def test_bytes_to_tar_output_tar_compression():
@@ -344,13 +344,12 @@ def test_bytes_to_tar_output_tar_compression():
     source_io = io.BytesIO()
     source_io.write(b'Beep boop')
     output = tar._save_bytes_to_tar(
-        'test.tar.gz', source_io, 1593457982.0115657, 'w|gz'
+        'test.tar.gz', source_io, 1593457982, 'w|gz'
     )
-    assert output.tell() == 156
+    assert output.tell() == 101
 
 
 def test_bytes_to_tar_save_timestamp_tar():
-    import time
     import tarfile
 
     tar = S3Tar('my-bucket', 'my-data.tar')
