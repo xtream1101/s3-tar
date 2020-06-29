@@ -1,4 +1,5 @@
 import io
+import time
 import boto3
 import pytest
 from s3_tar import S3Tar
@@ -195,7 +196,7 @@ def test_download_metadata_none():
 # _download_source_file
 ###
 @mock_s3
-def test_download_source_file():
+def test_download_source_file_contents():
     session = boto3.session.Session()
     s3 = session.client('s3')
     # Need to create the bucket since this is in Moto's 'virtual' AWS account
@@ -319,8 +320,12 @@ def test_get_tar_source_data():
     assert tar_io.tell() != 0
 
     tar_io.seek(0)
+    # Test tar file has content
     tar_obj = tarfile.open(fileobj=tar_io, mode='r')
     assert tar_obj.getmember('mydata/thing1.txt')
+
+    # Test that timestamp was preserved
+    assert tar_obj.getmember('mydata/thing1.txt').get_info()['mtime'] != 0
 
 
 ###
@@ -330,16 +335,32 @@ def test_bytes_to_tar_output_tar():
     tar = S3Tar('my-bucket', 'my-data.tar')
     source_io = io.BytesIO()
     source_io.write(b'Beep boop')
-    output = tar._save_bytes_to_tar('test.tar', source_io, 'w')
-    assert output.tell() == 1024
+    output = tar._save_bytes_to_tar('test.tar', source_io, time.time(), 'w')
+    assert output.tell() == 2048
 
 
 def test_bytes_to_tar_output_tar_compression():
     tar = S3Tar('my-bucket', 'my-data.tar')
     source_io = io.BytesIO()
     source_io.write(b'Beep boop')
-    output = tar._save_bytes_to_tar('test.tar.gz', source_io, 'w|gz')
-    assert output.tell() == 91
+    output = tar._save_bytes_to_tar('test.tar.gz', source_io, time.time(), 'w|gz')
+    assert output.tell() == 156
+
+
+def test_bytes_to_tar_save_timestamp_tar():
+    import time
+    import tarfile
+
+    tar = S3Tar('my-bucket', 'my-data.tar')
+    source_io = io.BytesIO()
+    source_io.write(b'Beep boop')
+    source_mtime = time.time()
+    output = tar._save_bytes_to_tar('foobar.txt', source_io, source_mtime, 'w')
+    output.seek(0)
+
+    tar_test_file = tarfile.open(fileobj=output)
+    member = tar_test_file.getmembers()[0]
+    assert member.get_info()['mtime'] != 0
 
 
 ###

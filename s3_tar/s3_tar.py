@@ -105,7 +105,8 @@ class S3Tar:
         """Remove source keys from s3
         """
         if self.remove_keys is True:
-            logger.info("Removing all keys added to this tar...")
+            logger.info("Removing all keys added to the tar {filename}"
+                        .format(filename=self.target_key))
 
             while len(self.keys_to_delete) > 0:
                 delete_these = []
@@ -261,9 +262,11 @@ class S3Tar:
             io.BytesIO: BytesIO object of the tar file
         """
         source_key_io = self._download_source_file(key)
+        source_mtime = self._get_source_key_mtime(key)
         source_tar_io = self._save_bytes_to_tar(
             tar_member_name,
             source_key_io,
+            source_mtime,
             mode=self.mode,
         )
         source_key_io.close()  # Cleanup
@@ -288,6 +291,7 @@ class S3Tar:
         source_metadata_tar_io = self._save_bytes_to_tar(
             tar_member_name + '.metadata.json',
             source_metadata_io,
+            time.time(),
             mode=self.mode,
         )
         source_metadata_io.close()  # Cleanup
@@ -326,13 +330,20 @@ class S3Tar:
         source_metadata_io.write(json.dumps(metadata).encode('utf-8'))
         return source_metadata_io
 
+    def _get_source_key_mtime(self, key):
+        return self.s3.head_object(
+            Bucket=self.source_bucket,
+            Key=key,
+        )['LastModified'].timestamp()
+
     @classmethod
-    def _save_bytes_to_tar(cls, name, source, mode):
+    def _save_bytes_to_tar(cls, name, source_io, source_mtime, mode):
         """Convert raw bytes into a tar
 
         Args:
             name (str): Filename inside the tar
-            source (io.BytesIO): The data to be saved into the tar
+            source_io (io.BytesIO): The data to be saved into the tar
+            source_mtime (): Last modified timestamp of the source file
             mode (str): The file mode in which to open the tar file
 
         Returns:
@@ -341,9 +352,10 @@ class S3Tar:
         source_tar_io = io.BytesIO()
         tar = tarfile.open(fileobj=source_tar_io, mode=mode)
         info = tarfile.TarInfo(name=name)
-        info.size = source.tell()
-        source.seek(0)
-        tar.addfile(tarinfo=info, fileobj=source)
+        info.size = source_io.tell()
+        info.mtime = source_mtime
+        source_io.seek(0)
+        tar.addfile(tarinfo=info, fileobj=source_io)
 
         if '|' in mode:
             # When using compression, the data is
