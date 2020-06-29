@@ -346,7 +346,9 @@ def test_bytes_to_tar_output_tar_compression():
     output = tar._save_bytes_to_tar(
         'test.tar.gz', source_io, 1593457982, 'w|gz'
     )
-    assert output.tell() == 101
+    output_size = output.tell()
+    # Ci and local machine compression differs by a few bytes
+    assert output_size >= 98 and output_size <= 102
 
 
 def test_bytes_to_tar_save_timestamp_tar():
