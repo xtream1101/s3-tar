@@ -343,7 +343,9 @@ def test_bytes_to_tar_output_tar_compression():
     tar = S3Tar('my-bucket', 'my-data.tar')
     source_io = io.BytesIO()
     source_io.write(b'Beep boop')
-    output = tar._save_bytes_to_tar('test.tar.gz', source_io, time.time(), 'w|gz')
+    output = tar._save_bytes_to_tar(
+        'test.tar.gz', source_io, time.time(), 'w|gz'
+    )
     assert output.tell() == 156
 
 

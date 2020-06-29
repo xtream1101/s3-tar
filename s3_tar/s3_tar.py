@@ -437,7 +437,7 @@ class S3Tar:
 
             logger.debug("Found {} objects so far...".format(total_file_count))
 
-        logger.info("Found {} objects in the folder '{}'"
+        logger.info("Found {} objects under the prefix '{}'"
                     .format(total_file_count, prefix))
 
     def add_file(self, key, folder=''):
