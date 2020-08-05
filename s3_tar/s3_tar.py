@@ -68,7 +68,7 @@ class S3Tar:
             self.part_size_multiplier = part_size_multiplier
 
         self.all_keys = set()  # Keys the user adds
-        self.keys_to_delete = set()  # Keys to delete one cleanup
+        self.keys_to_delete = set()  # Keys to delete on cleanup
         self.remove_keys = remove_keys
         self.file_cache = []  # io objects that are ready to be combined
         self.cache_size = cache_size
@@ -368,9 +368,9 @@ class S3Tar:
         if key_list is None:
             key_list = self.all_keys
 
-        if any((True for x in key_list
-                if tar_member_name == x[0] and key != x[1])):
-            if self.allow_dups is False:
+        if self.allow_dups is False:
+            if any((True for x in key_list
+                    if tar_member_name == x[0] and key != x[1])):
                 raise ValueError(("Filename '{member_name}' for key '{key}'"
                                   " already exists in the tar file."
                                   " Set allow_dups to continue.")
