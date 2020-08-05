@@ -103,3 +103,8 @@ In the bucket `my-archived-data`, in the folder `big_data/` there will be multip
 - 2009-archive-1.tar.gz
 - 2009-archive-2.tar.gz
 - 2009-archive-3.tar.gz
+
+
+#### Notes
+
+- For better performance, if you know the files you are adding will not have any duplicate names (or you are ok with duplicates), you can set `--allow-dups` in the cli or pass `allow_dups=True` to the `S3Tar` class to get better performance since it wil not have to check each files name.
