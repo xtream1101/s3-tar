@@ -12,7 +12,11 @@ Create a `tar`/`tar.gz`/`tar.bz2` file from many s3 files and stream back into s
 
 ## Usage
 
-Set up s3 credentials on your system by following https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-files.html  
+Set up s3 credentials on your system by either of these options:
+- Environment variables `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`
+- Shared credential file `~/.aws/credentials`
+- AWS config file `~/.aws/config`
+For details check out the aws docs: https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-files.html  
 
 Set the environment variable `S3_ENDPOINT_URL` to use a custom s3 host (minio/etc...) , not needed if using AWS s3. 
 
