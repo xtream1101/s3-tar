@@ -65,7 +65,8 @@ class S3Tar:
                 logger.warning("Part size multiplier must be >= 0."
                                " Defaulting to 10")
                 self.part_size_multiplier = 10
-            self.part_size_multiplier = part_size_multiplier
+            else:
+                self.part_size_multiplier = part_size_multiplier
 
         self.all_keys = set()  # Keys the user adds
         self.keys_to_delete = set()  # Keys to delete on cleanup
