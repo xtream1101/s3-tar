@@ -308,6 +308,12 @@ class S3Tar:
         """
         source_key_io = io.BytesIO()
         self.s3.download_fileobj(self.source_bucket, key, source_key_io)
+                
+        # Maybe necessary to flush and seek to the EOF,
+        # see https://github.com/boto/boto3/issues/1304
+        source_key_io.flush()
+        source_key_io.seek(0, 2)
+        
         return source_key_io
 
     def _download_source_metadata(self, key):
