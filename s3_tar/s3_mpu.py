@@ -5,16 +5,18 @@ logger = logging.getLogger(__name__)
 
 class S3MPU:
 
-    def __init__(self, s3, target_bucket, target_key):
+    def __init__(self, s3, target_bucket, target_key, storage_class):
         self.s3 = s3
         self.target_bucket = target_bucket
         self.target_key = target_key
+        self.storage_class = storage_class
         self.parts_mapping = []
 
         logger.info("Creating file {}".format(self.target_key))
         self.resp = self.s3.create_multipart_upload(
             Bucket=self.target_bucket,
             Key=self.target_key,
+            StorageClass=self.storage_class,
         )
         logger.debug("Multipart upload start: {}".format(self.resp))
 

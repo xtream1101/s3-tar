@@ -90,6 +90,8 @@ optional arguments:
                         ADVANCED: Max retries for each request the s3 client makes
   --part-size-multiplier PART_SIZE_MULTIPLIER
                         ADVANCED: Multiplied by 5MB to set the max size of each upload chunk
+  --storage-class STORAGE_CLASS
+                        ADVANCED: Storage class selector (Defaults to 'STANDARD', see s3 documentation for valid choices)
 ```
 
 

@@ -22,6 +22,7 @@ class S3Tar:
                  allow_dups=False,
                  s3_max_retries=4,
                  part_size_multiplier=None,
+                 storage_class='STANDARD',
                  session=boto3.session.Session()):
         self.allow_dups = allow_dups
         self.source_bucket = source_bucket
@@ -66,6 +67,8 @@ class S3Tar:
                                " Defaulting to 10")
                 self.part_size_multiplier = 10
             self.part_size_multiplier = part_size_multiplier
+
+        self.storage_class = storage_class
 
         self.all_keys = set()  # Keys the user adds
         self.keys_to_delete = set()  # Keys to delete on cleanup
@@ -132,7 +135,7 @@ class S3Tar:
         result_filepath = self._add_file_number(file_number)
 
         # Start multipart upload
-        mpu = S3MPU(self.s3, self.target_bucket, result_filepath)
+        mpu = S3MPU(self.s3, self.target_bucket, result_filepath, self.storage_class)
 
         current_file_size = 0
         # If out of files or min size is met, then complete file

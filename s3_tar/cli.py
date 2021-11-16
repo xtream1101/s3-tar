@@ -87,6 +87,14 @@ def create_parser():
         type=int,
         default=10,
     )
+    parser.add_argument(
+        "--storage-class",
+        help=("ADVANCED: Storage class selector"
+              " Valid choices are: STANDARD | REDUCED_REDUNDANCY | STANDARD_IA"
+              " | ONEZONE_IA | INTELLIGENT_TIERING | GLACIER | DEEP_ARCHIVE."
+              " Defaults to 'STANDARD'"),
+        default='STANDARD',
+    )
 
     return parser
 
@@ -105,6 +113,7 @@ def cli():
         allow_dups=args.allow_dups,
         s3_max_retries=args.s3_max_retries,
         part_size_multiplier=args.part_size_multiplier,
+        storage_class=args.storage_class,
     )  # pragma: no cover
     job.add_files(
         args.folder,
